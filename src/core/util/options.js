@@ -14,6 +14,9 @@ import {
 } from 'shared/util'
 
 /**
+ * 合并父子选项值为最终值的策略对象，此时 strats 是一个空对象，
+ * 因为 config.optionMergeStrategies = Object.create(null)
+ *
  * Option overwriting strategies are functions that handle
  * how to merge a parent option value and a child option
  * value into the final value.
@@ -21,9 +24,12 @@ import {
 const strats = config.optionMergeStrategies
 
 /**
+ * 有限制的方法选项，只能在实例中使用new关键字创建
  * Options with restrictions
  */
 if (process.env.NODE_ENV !== 'production') {
+  // 在 strats 对象上定义与参数选项名称相同的方法
+  // 定义 propsData 和 el方法
   strats.el = strats.propsData = function (parent, child, vm, key) {
     if (!vm) {
       warn(
@@ -57,6 +63,16 @@ function mergeData (to: Object, from: ?Object): Object {
 
 /**
  * Data
+ * let v = new Vue({
+    el: '#app',
+    data: {
+        a: 1,
+        b: [1, 2, 3]
+    }
+})
+ * data 选项则会使用 strats.data 策略函数处理
+ * 并且根据 strats.data 中的逻辑，
+ * strats.data 方法最终会返回一个函数：mergedInstanceDataFn
  */
 strats.data = function (
   parentVal: any,
@@ -111,6 +127,7 @@ strats.data = function (
 
 /**
  * Hooks and param attributes are merged as arrays.
+ * 添加相应的生命周期选项的合并策略函数
  */
 function mergeHook (
   parentVal: ?Array<Function>,
@@ -125,12 +142,14 @@ function mergeHook (
     : parentVal
 }
 
+// 添加相应生命周期钩子到strats对象中
 config._lifecycleHooks.forEach(hook => {
   strats[hook] = mergeHook
 })
 
 /**
  * Assets
+ * 添加指令(directives)、组件(components)、过滤器(filters)等选项的合并策略函数
  *
  * When a vm is present (instance creation), we need to do
  * a three-way merge between constructor options, instance
@@ -143,15 +162,20 @@ function mergeAssets (parentVal: ?Object, childVal: ?Object): Object {
     : res
 }
 
+// 写入资源 Vue 实例可用 指令(directives)、组件(components)、过滤器(filters)等选项 到 strats中
 config._assetTypes.forEach(function (type) {
   strats[type + 's'] = mergeAssets
 })
 
 /**
- * Watchers.
+ * Watchers. （观察者模式）
  *
+ * 观察者模式 不应该相互覆
+ * 所以我们将它们合并为数组。。
  * Watchers hashes should not overwrite one
  * another, so we merge them as arrays.
+ *
+ * 合并watch方法写入到 strats 对象中
  */
 strats.watch = function (parentVal: ?Object, childVal: ?Object): ?Object {
   /* istanbul ignore if */
@@ -173,7 +197,8 @@ strats.watch = function (parentVal: ?Object, childVal: ?Object): ?Object {
 }
 
 /**
- * Other object hashes.
+ * 把其他的一些指令 props、methods、computed 写入到 strats对象中
+ *  Other object hashes.
  */
 strats.props =
 strats.methods =
@@ -187,6 +212,12 @@ strats.computed = function (parentVal: ?Object, childVal: ?Object): ?Object {
 }
 
 /**
+ * 默认的合并策略，如果有 `childVal` 则返回 `childVal` 没有则返回 `parentVal`
+ * let v = new Vue({
+    el: '#app',
+})
+ *
+ * el 选项会使用 defaultStrat 默认策略函数处理
  * Default strategy.
  */
 const defaultStrat = function (parentVal: any, childVal: any): any {
@@ -258,6 +289,8 @@ function normalizeDirectives (options: Object) {
 }
 
 /**
+ * mergeOptions 中根据参数选项调用同名的策略方法进行合并处理
+ *
  * Merge two option objects into a new one.
  * Core utility used in both instantiation and inheritance.
  */
@@ -300,6 +333,7 @@ export function mergeOptions (
     const strat = strats[key] || defaultStrat
     options[key] = strat(parent[key], child[key], vm, key)
   }
+
   return options
 }
 
