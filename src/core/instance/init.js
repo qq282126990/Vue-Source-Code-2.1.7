@@ -72,6 +72,9 @@ export function initMixin (Vue: Class<Component>) {
        )
        */
 
+      // mergeOptions方法的第一个参数就是 Vue.options
+      // 第二个参数是我们调用Vue构造函数时的参数选项
+      // 第三个参数就是this对象 vue本身
       vm.$options = mergeOptions(
         // 解析构造器选项
         resolveConstructorOptions(vm.constructor),
@@ -141,8 +144,8 @@ export function initMixin (Vue: Class<Component>) {
     callHook(vm, 'created')
     /*
     * 初始化渲染
-    * this.$vnode = null // the placeholder node in parent tree
-      this._vnode = null // the root of the child tree
+    * this.$vnode = null // 父树中的占位符节点
+      this._vnode = null // 子树的根
       this._staticTrees = null
       this.$slots
       this.$scopedSlots
@@ -200,6 +203,7 @@ export function resolveConstructorOptions (Ctor: Class<Component>) {
      _base: Vue
    }
    * */
+  // vue的构造函数本身
   let options = Ctor.options
 
   // 判断是否定义了 Vue.super，这个是用来处理继承的

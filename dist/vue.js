@@ -885,9 +885,12 @@ function dependArray (value) {
 var strats = config.optionMergeStrategies;
 
 /**
+ * 有限制的方法选项，只能在实例中使用new关键字创建
  * Options with restrictions
  */
 {
+  // 在 strats 对象上定义与参数选项名称相同的方法
+  // 定义 propsData 和 el方法
   strats.el = strats.propsData = function (parent, child, vm, key) {
     if (!vm) {
       warn(
@@ -921,6 +924,16 @@ function mergeData (to, from) {
 
 /**
  * Data
+ * let v = new Vue({
+    el: '#app',
+    data: {
+        a: 1,
+        b: [1, 2, 3]
+    }
+})
+ * data 选项则会使用 strats.data 策略函数处理
+ * 并且根据 strats.data 中的逻辑，
+ * strats.data 方法最终会返回一个函数：mergedInstanceDataFn
  */
 strats.data = function (
   parentVal,
@@ -975,6 +988,7 @@ strats.data = function (
 
 /**
  * Hooks and param attributes are merged as arrays.
+ * 添加相应的生命周期选项的合并策略函数
  */
 function mergeHook (
   parentVal,
@@ -989,12 +1003,14 @@ function mergeHook (
     : parentVal
 }
 
+// 添加相应生命周期钩子到strats对象中
 config._lifecycleHooks.forEach(function (hook) {
   strats[hook] = mergeHook;
 });
 
 /**
  * Assets
+ * 添加指令(directives)、组件(components)、过滤器(filters)等选项的合并策略函数
  *
  * When a vm is present (instance creation), we need to do
  * a three-way merge between constructor options, instance
@@ -1007,15 +1023,20 @@ function mergeAssets (parentVal, childVal) {
     : res
 }
 
+// 写入资源 Vue 实例可用 指令(directives)、组件(components)、过滤器(filters)等选项 到 strats中
 config._assetTypes.forEach(function (type) {
   strats[type + 's'] = mergeAssets;
 });
 
 /**
- * Watchers.
+ * Watchers. （观察者模式）
  *
+ * 观察者模式 不应该相互覆
+ * 所以我们将它们合并为数组。。
  * Watchers hashes should not overwrite one
  * another, so we merge them as arrays.
+ *
+ * 合并watch方法写入到 strats 对象中
  */
 strats.watch = function (parentVal, childVal) {
   /* istanbul ignore if */
@@ -1037,7 +1058,8 @@ strats.watch = function (parentVal, childVal) {
 };
 
 /**
- * Other object hashes.
+ * 把其他的一些指令 props、methods、computed 写入到 strats对象中
+ *  Other object hashes.
  */
 strats.props =
 strats.methods =
@@ -1051,6 +1073,12 @@ strats.computed = function (parentVal, childVal) {
 };
 
 /**
+ * 默认的合并策略，如果有 `childVal` 则返回 `childVal` 没有则返回 `parentVal`
+ * let v = new Vue({
+    el: '#app',
+})
+ *
+ * el 选项会使用 defaultStrat 默认策略函数处理
  * Default strategy.
  */
 var defaultStrat = function (parentVal, childVal) {
@@ -1122,6 +1150,8 @@ function normalizeDirectives (options) {
 }
 
 /**
+ * mergeOptions 中根据参数选项调用同名的策略方法进行合并处理
+ *
  * Merge two option objects into a new one.
  * Core utility used in both instantiation and inheritance.
  */
@@ -1164,6 +1194,7 @@ function mergeOptions (
     var strat = strats[key] || defaultStrat;
     options[key] = strat(parent[key], child[key], vm, key);
   }
+
   return options
 }
 
@@ -1725,7 +1756,7 @@ Watcher.prototype.run = function run () {
       value !== this.value ||
       // Deep watchers and watchers on Object/Arrays should fire even
       // when the value is the same, because the value may
-      // have mutated.
+        // have mutated.
       isObject(value) ||
       this.deep
     ) {
@@ -3299,20 +3330,18 @@ function resolveSlots (
 var uid = 0;
 
 function initMixin (Vue) {
+  // 处理Vue实例对象，以及做一些初始化的工作
   Vue.prototype._init = function (options) {
     // 在this上定义两个属性 _uid 和 _isVue
     var vm = this;
 
-    // 一个uid
+    // 设置每一个新的vue实例都是一个新的实例
     // a uid
     vm._uid = uid++;
 
     // 一个标志可以避免这种情况的发生
     // a flag to avoid this being observed
     vm._isVue = true;
-
-    console.log(options);
-    console.log(options._isComponent);
 
     // 合并选项 Vue 内部使用
     // merge options
@@ -3330,29 +3359,134 @@ function initMixin (Vue) {
     }
     // 使用策略对象合并参数选项
     else {
+      /* 合并选项
+       * mergeOptions 方法的
+       * 第一个参数就是 Vue.options。
+       * 第二个参数是我们调用Vue构造函数时的参数选项
+       * 第三个参数是 vm 也就是 this 对象
+       * 最终options如下
+       vm.$options = mergeOptions(
+         {
+             components: {
+             KeepAlive,
+             Transition,
+             TransitionGroup
+         },
+         directives: {
+             model,
+             show
+         },
+         filters: {},
+         _base: Vue
+         },
+         // 调用Vue构造函数时传入的参数选项 options
+         {
+             el: '#app',
+             data: {
+               a: 1,
+               b: [1, 2, 3]
+             }
+         },
+         // this
+         vm
+       )
+       */
+
+      // mergeOptions方法的第一个参数就是 Vue.options
+      // 第二个参数是我们调用Vue构造函数时的参数选项
+      // 第三个参数就是this对象 vue本身
       vm.$options = mergeOptions(
+        // 解析构造器选项
         resolveConstructorOptions(vm.constructor),
         options || {},
         vm
       );
     }
+
+    //  _init() 方法合并完选项之后的代码：
     /* istanbul ignore else */
     {
       initProxy(vm);
     }
+
+    // 暴露Vue.self
     // expose real self
     vm._self = vm;
+
+    /* 上面的代码，在生产环境下会为实例添加两个属性，并且属性值都为实例本身
+     * vm._renderProxy = vm
+     * vm._self = vm
+     */
+
+    /*
+    * 初始化生命周期钩子
+    * this.$parent = parent
+      this.$root = parent ? parent.$root : this
+
+     this.$children = []
+     this.$refs = {}
+
+     this._watcher = null
+     this._inactive = false
+     this._isMounted = false
+     this._isDestroyed = false
+     this._isBeingDestroyed = false
+    * */
     initLifecycle(vm);
+    /*
+    * 初始化事件方法
+    * this._events = {}
+      this._updateListeners = function(){}
+      在 initEvents 中除了添加属性之外，
+      如果有 vm.$options._parentListeners 还要调用 vm._updateListeners() 方法
+    * */
     initEvents(vm);
+    // 回调生命周期钩子 beforeCreate
     callHook(vm, 'beforeCreate');
+    /*
+    * 初始化状态
+    * this._watchers = []
+      // initData
+      this._data
+
+      在 initState 中又调用了一些其他init方法
+      vm._watchers = []
+      initProps(vm)
+      initMethods(vm)
+      initData(vm)
+      initComputed(vm)
+      initWatch(vm)
+    * */
     initState(vm);
+    // 回调生命周期钩子 created
     callHook(vm, 'created');
+    /*
+    * 初始化渲染
+    * this.$vnode = null // 父树中的占位符节点
+      this._vnode = null // 子树的根
+      this._staticTrees = null
+      this.$slots
+      this.$scopedSlots
+      this._c
+      this.$createElement
+
+      最后在 initRender 中如果有 vm.$options.el 还要调用 vm.$mount(vm.$options.el)
+      if (vm.$options.el) {
+         vm.$mount(vm.$options.el)
+      }
+      这就是为什么如果不传递 el 选项就需要手动 mount 的原因了
+    * */
     initRender(vm);
+
+    // 看到这里，也就明白了为什么 created 的时候不能操作DOM了
+    // 这个时候还没有渲染真正的DOM元素到文档中
+    // created 仅仅代表数据状态的初始化完成
   };
 }
 
 function initInternalComponent (vm, options) {
   var opts = vm.$options = Object.create(vm.constructor.options);
+  // 这样做是因为它比动态枚举更快。
   // doing this because it's faster than dynamic enumeration.
   opts.parent = options.parent;
   opts.propsData = options.propsData;
@@ -3369,7 +3503,28 @@ function initInternalComponent (vm, options) {
 }
 
 function resolveConstructorOptions (Ctor) {
+  /*
+   * 接收一个参数ctor，通过传入的vm.constructor 可以知道其实是vue的构造函数本身
+   * Vue.options
+   * 如下
+   * Vue.options = {
+     components: {
+       KeepAlive,
+       Transition,
+       TransitionGroup
+     },
+     directives: {
+       model,
+       show
+     },
+    filters: {},
+     _base: Vue
+   }
+   * */
+  // vue的构造函数本身
   var options = Ctor.options;
+
+  // 判断是否定义了 Vue.super，这个是用来处理继承的
   if (Ctor.super) {
     var superOptions = Ctor.super.options;
     var cachedSuperOptions = Ctor.superOptions;
@@ -3386,6 +3541,8 @@ function resolveConstructorOptions (Ctor) {
       }
     }
   }
+
+  // 直接返回了 Vue.options, 传递给 mergeOptions 方法的第一个参数就是 Vue.options
   return options
 }
 
@@ -3401,10 +3558,113 @@ function Vue$3 (options) {
 }
 
 // 引入依赖，定义Vue构造函，然后以Vue构造函数为参数调用这5个方法
+
+/**
+ * 初始化相关
+ * Vue.prototype._init = function (options?: Object) {}
+ * */
 initMixin(Vue$3);
+
+/*
+ * 状态相关
+ * // Vue 实例观察的数据对象。Vue 实例代理了对其 data 对象属性的访问。
+ * Vue.prototype.$data
+ *
+ * // 设置对象的属性。如果对象是响应式的，确保属性被创建后也是响应式的，同时触发视图更新。这个方法主要用于避开 Vue 不能检测属性被添加的限制。
+ * Vue.prototype.$set = set
+ *
+ * // 删除对象的属性。如果对象是响应式的，确保删除能触发更新视图。这个方法主要用于避开 Vue 不能检测到属性被删除的限制，但是你应该很少会使用它。
+ * Vue.prototype.$delete = del
+ *
+ * // 回调函数得到的参数为新值和旧值。表达式只接受监督的键路径。对于更复杂的表达式，用一个函数取代。
+ * Vue.prototype.$watch = function (){}
+ * */
 stateMixin(Vue$3);
+
+/**
+ * 事件相关
+ * // 监听当前实例上的自定义事件。事件可以由vm.$emit触发。回调函数会接收所有传入事件触发函数的额外参数。
+ * Vue.prototype.$on = function (event: string, fn: Function): Component {}
+ *
+ * // 监听一个自定义事件，但是只触发一次，在第一次触发之后移除监听器
+ * Vue.prototype.$once = function (event: string, fn: Function): Component {}
+ *
+ * // 移除自定义事件监听器
+ * Vue.prototype.$off = function (event?: string, fn?: Function): Component {}
+ *
+ * // 触发当前实例上的事件。附加参数都会传给监听器回调
+ * Vue.prototype.$emit = function (event: string): Component {}
+ * */
 eventsMixin(Vue$3);
+
+/*
+ * 生命周期相关
+ * // 挂载 beforeMount和mounted生命钩子
+ * Vue.prototype._mount = function (el?: Element | void,hydrating?: boolean): Component {}
+ *
+ * // 挂载 beforeUpdate和updated生命钩子
+ * Vue.prototype._update = function (vnode: VNode, hydrating?: boolean) {}
+ *
+ * // 更新props、propsData、$listeners、$forceUpdate、$slots、$parent、$children等详细请参见该方法
+ * Vue.prototype._updateFromParent = function (propsData: ?Object,listeners: ?Object,parentVnode: VNode,renderChildren: ?Array<VNode>) {}
+ *
+ * // 迫使 Vue 实例重新渲染。注意它仅仅影响实例本身和插入插槽内容的子组件，而不是所有子组件。
+ * Vue.prototype.$forceUpdate = function () {}
+ *
+ * // 完全销毁一个实例。清理它与其它实例的连接，解绑它的全部指令及事件监听器。
+ * // 触发 beforeDestroy 和 destroyed 的钩子
+ * Vue.prototype.$destroy = function () {}
+ * */
 lifecycleMixin(Vue$3);
+
+/*
+ * 渲染相关
+ *
+ * // 将回调延迟到下次 DOM 更新循环之后执行。在修改数据之后立即使用它，然后等待 DOM 更新。它跟全局方法 Vue.nextTick 一样，不同的是回调的 this 自动绑定到调用它的实例上。
+ * Vue.prototype.$nextTick = function (fn: Function) {}
+ *
+ * // 字符串模板的代替方案，允许你发挥 JavaScript 最大的编程能力。该渲染函数接收一个 createElement 方法作为第一个参数用来创建 VNode。
+ * Vue.prototype._render
+ *
+ * // toString方法
+ * Vue.prototype._s = _toString
+ *
+ * // 将文本转换为vnode
+ * Vue.prototype._v = createTextVNode
+ *
+ * // number转换
+ * Vue.prototype._n = toNumber
+ *
+ * // 创建一个空节点
+ * Vue.prototype._e = createEmptyVNode
+ *
+ * // 检查两个值是否宽松相等 —— 也就是说，如果它们是纯对象，它们是否具有相同的形状？
+ * Vue.prototype._q = looseEqual
+ *
+ * // 寻找该数组对应值的索引值，如果找到了，返回索引值；否则返回 -1
+ * Vue.prototype._i = looseIndexOf
+ *
+ * // 渲染静态节点
+ * Vue.prototype._m = function renderStatic (index: number,isInFor?: boolean): VNode | Array<VNode> {}
+ *
+ * // 将节点标记为静态（v-once）只渲染元素和组件一次。随后的重新渲染，元素/组件及其所有的子节点将被视为静态内容并跳过。这可以用于优化更新性能。
+ * Vue.prototype._o = function markOnce () {}
+ *
+ * // 过滤器 filters
+ * Vue.prototype._f = function resolveFilter (id) {}
+ *
+ * // 渲染v-for
+ * Vue.prototype._l = function renderList (){}
+ *
+ * // 渲染Slot
+ * Vue.prototype._t = function (){}
+ *
+ * // 调用 v-bind 方法
+ * Vue.prototype._b = function bindProps (data: any,tag: string,value: any,asProp?: boolean): VNodeData {}
+ *
+ * // 检查 v-on 建码
+ * Vue.prototype._k = function checkKeyCodes (
+ * */
 renderMixin(Vue$3);
 
 // 最后导出Vue
@@ -3641,12 +3901,15 @@ function initGlobalAPI (Vue) {
   initAssetRegisters(Vue);
 }
 
+// 导入已经在原型上加载了方法和属性后的Vue
 initGlobalAPI(Vue$3);
 
+// 在Vue.prototype上挂载 $isServer
 Object.defineProperty(Vue$3.prototype, '$isServer', {
   get: isServerRendering
 });
 
+// 挂载版本属性
 Vue$3.version = '2.1.7';
 
 /*  */
@@ -6066,17 +6329,17 @@ Vue$3.config.mustUseProp = mustUseProp;
  * Vue.options变化为
  *
  * Vue.options = {
- components: {
- KeepAlive,
- Transition,
- TransitionGroup
- },
- directives: {
- model,
- show
- },
- filters: {},
- _base: Vue
+   components: {
+     KeepAlive,
+     Transition,
+     TransitionGroup
+   },
+   directives: {
+     model,
+     show
+   },
+   filters: {},
+  _base: Vue
  }
  * */
 extend(Vue$3.options.directives, platformDirectives);
@@ -6092,10 +6355,8 @@ Vue$3.prototype.__patch__ = inBrowser ? patch$1 : noop;
  * 手动地挂载一个未挂载的实例。
  * wrap mount
  * */
-Vue$3.prototype.$mount = function (
-  el,
-  hydrating
-) {
+Vue$3.prototype.$mount = function (el,
+                                 hydrating) {
   // 根据浏览器环境决定用不用 query(el)获取元素
   el = el && inBrowser ? query(el) : undefined;
 
@@ -6107,6 +6368,7 @@ Vue$3.prototype.$mount = function (
  * 配置是否允许 vue-devtools 检查代码。开发版本默认为 true，生产版本默认为 false。生产版本设为 true 可以启用检查。
  * devtools global hook
  * */
+
 /* istanbul ignore next */
 setTimeout(function () {
   if (config.devtools) {
